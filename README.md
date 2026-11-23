@@ -2,9 +2,9 @@
 
 Native macOS app that receives live Bluetooth shots from **SC4 2188**, saves records locally, and replays ball flight. The repository name is `mysc_sc300`; the implemented and tested device is **SC4**, not SC300.
 
-**Version 1.1.0 · Apple Silicon · macOS 13 or later**
+**Version 1.2.0 · Apple Silicon · macOS 13 or later**
 
-[Download the Mac app ZIP](Downloads/SC4ShotCollector-1.1.0-macOS-arm64.zip) · [한국어 사용법](README.ko.txt) · [English instructions](README.en.txt)
+[Download the Mac app ZIP](https://github.com/slee1005/mysc_sc300/releases/download/v1.2.0/SC4ShotCollector-1.2.0-macOS-arm64.zip) · [한국어 사용법](README.ko.txt) · [English instructions](README.en.txt)
 
 ## Features
 
@@ -14,6 +14,7 @@ Native macOS app that receives live Bluetooth shots from **SC4 2188**, saves rec
 - Korean and English language selection, with editable `.strings` language files.
 - Meter/yard switching for distance, apex, replay height/grid marks and CSV/JSON exports.
 - Animated replay with 3D, side and top views, timeline scrubbing and playback speed controls.
+- Drag the ground in 3D to rotate and tilt the camera; Reset View restores the starting angle.
 - Optional automatic replay of newly received shots.
 
 ## Run and build

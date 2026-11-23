@@ -10,6 +10,8 @@ struct FlightSimulationView: View {
     @State private var startedAt = Date()
     @State private var rate: Double = 0.5
     @State private var camera: FlightCamera = .perspective
+    @State private var orbit = FlightOrbit.initial
+    @GestureState private var orbitDrag: CGSize = .zero
     @State private var followLatest = false
     @State private var assumedAngle = 35.0
     private let ink = Color(red: 0.07, green: 0.24, blue: 0.24)
@@ -18,6 +20,20 @@ struct FlightSimulationView: View {
 
     private var orderedShots: [ShotRecord] { model.shots.sorted { $0.receivedAt > $1.receivedAt } }
     private var selectedShot: ShotRecord? { model.shots.first { $0.id == selectedID } ?? orderedShots.first }
+    private var visibleOrbit: FlightOrbit {
+        orbit.dragging(horizontal: Double(orbitDrag.width), vertical: Double(orbitDrag.height))
+    }
+
+    private var orbitGesture: some Gesture {
+        DragGesture(minimumDistance: 3)
+            .updating($orbitDrag) { value, translation, _ in
+                if camera == .perspective { translation = value.translation }
+            }
+            .onEnded { value in
+                guard camera == .perspective else { return }
+                orbit = orbit.dragging(horizontal: Double(value.translation.width), vertical: Double(value.translation.height))
+            }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -79,6 +95,14 @@ struct FlightSimulationView: View {
                 Label(display.text("기록 기반 재현"), systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                     .font(.system(size: 12, weight: .medium))
                 Spacer()
+                if camera == .perspective {
+                    Button {
+                        orbit = .initial
+                    } label: {
+                        Label(display.text("시점 초기화"), systemImage: "viewfinder")
+                    }
+                    .help(display.text("3D 시점을 처음 각도로 되돌립니다."))
+                }
                 Picker(display.text("시점"), selection: $camera) {
                     ForEach(FlightCamera.allCases) { view in Text(display.text(view.labelKey)).tag(view) }
                 }.pickerStyle(.segmented).frame(width: 270)
@@ -87,9 +111,13 @@ struct FlightSimulationView: View {
                 let t = playbackTime(at: timeline.date, duration: replay.duration)
                 let ball = replay.position(at: t)
                 VStack(spacing: 12) {
-                    FlightCanvas(replay: replay, time: t, camera: camera, unit: display.distanceUnit, language: display.language)
+                    FlightCanvas(replay: replay, time: t, camera: camera, pose: camera.pose(orbit: visibleOrbit),
+                                 unit: display.distanceUnit, language: display.language)
                         .frame(height: 330)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .contentShape(Rectangle())
+                        .gesture(orbitGesture, including: camera == .perspective ? .all : .none)
+                        .help(display.text(camera == .perspective ? "바닥을 드래그하여 좌우 회전과 높이 각도를 조절하세요." : "3D 시점에서 마우스로 시점을 조절할 수 있습니다."))
                         .overlay(alignment: .topLeading) {
                             HStack(spacing: 18) {
                                 hud(display.text(ball.phase.rawValue), value: String(format: "%.2f s", t))
@@ -99,9 +127,21 @@ struct FlightSimulationView: View {
                             .padding(13)
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                             .padding(12)
+                            .allowsHitTesting(false)
                         }
                         .accessibilityLabel(display.text("{0}, 진행 거리 {1}, 높이 {2}", display.text(ball.phase.rawValue),
                                                         display.distance(ball.groundDistance), display.distance(ball.height)))
+                    if camera == .perspective {
+                        HStack {
+                            Label(display.text("드래그: 좌우 회전 · 위아래 각도"), systemImage: "hand.draw")
+                            Spacer()
+                            Text(display.text("회전 {0}° · 높이 {1}°",
+                                              display.number(visibleOrbit.yaw * 180 / .pi, digits: 0),
+                                              display.number(visibleOrbit.elevation * 180 / .pi, digits: 0)))
+                                .monospacedDigit()
+                        }
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
                     HStack(spacing: 12) {
                         Button {
                             if isPlaying {
@@ -207,22 +247,11 @@ struct FlightSimulationView: View {
     }
 }
 
-private enum FlightCamera: String, CaseIterable, Identifiable {
-    case perspective, side, top
-    var labelKey: String {
-        switch self { case .perspective: return "3D 시점"; case .side: return "측면"; case .top: return "위에서" }
-    }
-    var id: String { rawValue }
-    var yaw: Double { self == .perspective ? -0.40 : 0 }
-    var elevation: Double {
-        switch self { case .perspective: return 0.60; case .side: return 0; case .top: return .pi / 2 }
-    }
-}
-
 private struct FlightCanvas: View {
     let replay: FlightReplay
     let time: Double
     let camera: FlightCamera
+    let pose: FlightCameraPose
     let unit: DistanceUnit
     let language: AppLanguage
 
@@ -236,7 +265,7 @@ private struct FlightCanvas: View {
             let corners = [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]
             let ground = corners.map { world($0.0, $0.1, 0) }
             let path = replay.points()
-            let projection = Projection(camera: camera, size: size, points: ground + path)
+            let projection = Projection(pose: pose, size: size, points: ground + path)
             let green = Color(red: 0.30, green: 0.56, blue: 0.43)
             let gold = Color(red: 0.96, green: 0.65, blue: 0.19)
             let full = CGRect(origin: .zero, size: size)
@@ -321,14 +350,14 @@ private struct FlightCanvas: View {
     }
 
     private struct Projection {
-        let camera: FlightCamera
+        let pose: FlightCameraPose
         let scale: Double
         let translateX: Double
         let translateY: Double
 
-        init(camera: FlightCamera, size: CGSize, points: [FlightPosition]) {
-            self.camera = camera
-            let transformed = points.map { Self.project($0, camera: camera) }
+        init(pose: FlightCameraPose, size: CGSize, points: [FlightPosition]) {
+            self.pose = pose
+            let transformed = points.map(pose.project)
             let minX = transformed.map(\.x).min() ?? 0, maxX = transformed.map(\.x).max() ?? 1
             let minY = transformed.map(\.y).min() ?? 0, maxY = transformed.map(\.y).max() ?? 1
             let spanX = max(0.1, maxX - minX), spanY = max(0.1, maxY - minY)
@@ -339,15 +368,8 @@ private struct FlightCanvas: View {
         }
 
         func point(_ p: FlightPosition) -> CGPoint {
-            let value = Self.project(p, camera: camera)
+            let value = pose.project(p)
             return CGPoint(x: value.x * scale + translateX, y: value.y * scale + translateY)
-        }
-
-        private static func project(_ point: FlightPosition, camera: FlightCamera) -> CGPoint {
-            let x = point.forward * cos(camera.yaw) + point.lateral * sin(camera.yaw)
-            let depth = point.forward * sin(camera.yaw) - point.lateral * cos(camera.yaw)
-            let y = depth * sin(camera.elevation) - point.height * cos(camera.elevation)
-            return CGPoint(x: x, y: y)
         }
     }
 }

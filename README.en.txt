@@ -1,4 +1,4 @@
-SC4 Shot Collector 1.1
+SC4 Shot Collector 1.2.0
 
 Native Apple Silicon Mac app for SC4 2188 (D3:71:43:B6:CC:0C), macOS 13 or later.
 Run dist/SC4 Shot Collector.app. Select English in the language menu at the top right.
@@ -17,6 +17,7 @@ Language and units
 - Editable language files: Resources/en.lproj/Localizable.strings and Resources/ko.lproj/Localizable.strings. Keep numbered placeholders intact.
 
 Flight replay
+In 3D View, click and drag the ground to orbit horizontally and tilt vertically. Reset View restores the starting angle. Side and Top views remain fixed; returning to 3D restores your adjusted angle. Camera changes do not alter shot data or playback position.
 Select a shot and click Flight Simulation. Play/pause, scrub, change speed or choose 3D, Side View or Top View. Auto-play New Shots follows new live measurements.
 The trajectory is fitted to recorded carry, apex and valid launch angle. Timing is estimated. Wind, aerodynamic drag and spin curvature are not modeled; roll timing is illustrative.
 

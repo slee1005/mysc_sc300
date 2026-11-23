@@ -124,3 +124,9 @@
 "확인이 필요합니다" = "Attention Required";
 "연결 끊기" = "Disconnect";
 "수신 시각 · 클럽" = "Received At · Club";
+"시점 초기화" = "Reset View";
+"3D 시점을 처음 각도로 되돌립니다." = "Restore the initial 3D viewing angle.";
+"바닥을 드래그하여 좌우 회전과 높이 각도를 조절하세요." = "Drag the ground to rotate the view and change the elevation.";
+"3D 시점에서 마우스로 시점을 조절할 수 있습니다." = "Switch to 3D View to adjust the camera with the mouse.";
+"드래그: 좌우 회전 · 위아래 각도" = "Drag: rotate horizontally · tilt vertically";
+"회전 {0}° · 높이 {1}°" = "Rotation {0}° · elevation {1}°";

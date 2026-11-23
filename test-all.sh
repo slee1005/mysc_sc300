@@ -26,3 +26,8 @@ swiftc -module-cache-path "$task_cache" "$task_root/Sources/SharedModels.swift" 
   "$task_root/Sources/Presentation.swift" "$task_root/Sources/ShotStore.swift" \
   "$task_root/Tests/PresentationTests.swift" -o "$task_test_dir/presentation-tests"
 "$task_test_dir/presentation-tests" "$@"
+swiftc -module-cache-path "$task_cache" "$task_root/Sources/SharedModels.swift" \
+  "$task_root/Sources/SC4Protocol.swift" "$task_root/Sources/SC4History.swift" \
+  "$task_root/Sources/FlightReplay.swift" "$task_root/Sources/FlightCamera.swift" \
+  "$task_root/Tests/FlightCameraTests.swift" -o "$task_test_dir/flight-camera-tests"
+"$task_test_dir/flight-camera-tests"
