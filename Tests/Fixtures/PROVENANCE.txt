@@ -1,0 +1,1 @@
+Synthetic SC4 protocol test vector. Generated from the documented field layout; this is not a captured user shot. All IDs, dates and measurements are fabricated for tests. The deliberately invalid raw launch angle 136 degrees tests preservation without inventing a valid measurement. No personal shot history or Bluetooth transport log is included.
