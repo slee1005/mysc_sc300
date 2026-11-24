@@ -10,7 +10,7 @@ enum FlightCamera: String, CaseIterable, Identifiable {
     func pose(orbit: FlightOrbit) -> FlightCameraPose {
         switch self {
         case .perspective: return FlightCameraPose(yaw: orbit.yaw, elevation: orbit.elevation)
-        case .side: return FlightCameraPose(yaw: 0, elevation: 0)
+        case .side: return FlightCameraPose(yaw: .pi / 2, elevation: 0)
         case .top: return FlightCameraPose(yaw: 0, elevation: .pi / 2)
         }
     }
@@ -21,9 +21,11 @@ struct FlightCameraPose: Equatable {
     let elevation: Double
 
     func project(_ point: FlightPosition) -> CGPoint {
-        let x = point.forward * cos(yaw) + point.lateral * sin(yaw)
-        let depth = point.forward * sin(yaw) - point.lateral * cos(yaw)
-        return CGPoint(x: x, y: depth * sin(elevation) - point.height * cos(elevation))
+        // From behind the tee, positive lateral displacement is screen-right
+        // and forward distance runs toward the top of the target line.
+        let x = point.lateral * cos(yaw) + point.forward * sin(yaw)
+        let depth = point.forward * cos(yaw) - point.lateral * sin(yaw)
+        return CGPoint(x: x, y: -depth * sin(elevation) - point.height * cos(elevation))
     }
 }
 
@@ -33,7 +35,7 @@ struct FlightOrbit: Equatable {
     static let initial = FlightOrbit()
     static let minimumElevation = 8.0 * Double.pi / 180
     static let maximumElevation = 85.0 * Double.pi / 180
-    private(set) var yaw: Double = -0.40
+    private(set) var yaw: Double = 0
     private(set) var elevation: Double = 0.60
 
     func dragging(horizontal: Double, vertical: Double) -> FlightOrbit {

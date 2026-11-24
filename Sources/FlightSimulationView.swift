@@ -4,7 +4,7 @@ struct FlightSimulationView: View {
     @EnvironmentObject private var model: CollectorModel
     @EnvironmentObject private var display: DisplayPreferences
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedID: UUID
+    @State private var selectedID: UUID?
     @State private var isPlaying = true
     @State private var offset: Double = 0
     @State private var startedAt = Date()
@@ -12,11 +12,17 @@ struct FlightSimulationView: View {
     @State private var camera: FlightCamera = .perspective
     @State private var orbit = FlightOrbit.initial
     @GestureState private var orbitDrag: CGSize = .zero
-    @State private var followLatest = false
+    @State private var followLatest: Bool
+    @AppStorage("virtualRangeFollowBall") private var followBall = false
+    @State private var rangeExpanded = false
     @State private var assumedAngle = 35.0
     private let ink = Color(red: 0.07, green: 0.24, blue: 0.24)
 
-    init(shot: ShotRecord) { _selectedID = State(initialValue: shot.id) }
+    init(shot: ShotRecord?, startsInLiveMode: Bool = false) {
+        _selectedID = State(initialValue: shot?.id)
+        _followLatest = State(initialValue: startsInLiveMode)
+        _rate = State(initialValue: startsInLiveMode ? 1 : 0.5)
+    }
 
     private var orderedShots: [ShotRecord] { model.shots.sorted { $0.receivedAt > $1.receivedAt } }
     private var selectedShot: ShotRecord? { model.shots.first { $0.id == selectedID } ?? orderedShots.first }
@@ -39,8 +45,7 @@ struct FlightSimulationView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(display.text("공 비행 시뮬레이션")).font(.system(size: 24, weight: .semibold, design: .rounded))
-                    Text(display.text("저장된 샷의 궤적을 다시 재생합니다.")).font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text(display.text("공 비행 시뮬레이션") + " · Virtual Range").font(.system(size: 24, weight: .semibold, design: .rounded))
                 }
                 Spacer()
                 Picker(display.text("언어"), selection: $display.language) {
@@ -52,30 +57,55 @@ struct FlightSimulationView: View {
                 }.pickerStyle(.segmented).frame(width: 105)
                 Button(display.text("닫기")) { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            HStack(spacing: 16) {
-                Picker(display.text("샷 선택"), selection: $selectedID) {
-                    ForEach(orderedShots) { shot in
-                        Text(shotLabel(shot)).tag(shot.id)
-                    }
-                }.frame(maxWidth: 490)
+            HStack {
                 Spacer()
                 Toggle(display.text("새 샷 자동 재생"), isOn: $followLatest).toggleStyle(.switch).controlSize(.small)
             }
-            ScrollView {
-                if let shot = selectedShot, let replay = FlightReplay(shot: shot, assumedAngle: assumedAngle) {
-                    simulation(replay, shot: shot)
-                } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "figure.golf").font(.system(size: 40))
-                        Text(display.text("이 샷에는 궤적을 계산할 값이 부족합니다."))
-                        Text(display.text("캐리·최고 높이 또는 유효한 볼 속도가 있는 샷을 선택하세요."))
-                            .font(.system(size: 12)).foregroundStyle(.secondary)
-                    }.frame(maxWidth: .infinity, minHeight: 420)
+            HStack(alignment: .top, spacing: 16) {
+                if !rangeExpanded { rangeHistory }
+                ScrollView {
+                    if let shot = selectedShot, let replay = FlightReplay(shot: shot, assumedAngle: assumedAngle) {
+                        simulation(replay, shot: shot)
+                    } else {
+                        HStack(alignment: .top, spacing: 14) {
+                            if !rangeExpanded {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(display.text("공 비행 시뮬레이션")).font(.headline)
+                                    VStack(spacing: 10) {
+                                        Image(systemName: "figure.golf").font(.title)
+                                        Text(display.text(selectedShot == nil
+                                            ? "샷을 치면 여기에 표시됩니다."
+                                            : "이 샷에는 궤적을 계산할 값이 부족합니다."))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 320)
+                                    .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                                }
+                                .frame(width: 252)
+                            }
+                            VStack(alignment: .leading, spacing: 8) {
+                                rangeHeader
+                                VirtualRangeCanvas(replay: nil, time: 0, unit: display.distanceUnit)
+                                    .frame(height: rangeHeight)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .overlay(alignment: .bottom) {
+                                        if rangeExpanded {
+                                            Text(display.text(selectedShot == nil
+                                                ? "샷을 치면 여기에 표시됩니다."
+                                                : "이 샷에는 궤적을 계산할 값이 부족합니다."))
+                                                .padding(10)
+                                                .background(.regularMaterial, in: Capsule())
+                                                .padding(10)
+                                        }
+                                    }
+                            }
+                        }
+                    }
                 }
             }
         }
         .padding(24)
-        .frame(minWidth: 960, idealWidth: 1060, minHeight: 730, idealHeight: 820)
+        .frame(minWidth: 1080, idealWidth: 1280, minHeight: 730, idealHeight: 820)
         .background(Color(red: 0.96, green: 0.97, blue: 0.96))
         .foregroundStyle(ink)
         .tint(ink)
@@ -89,58 +119,78 @@ struct FlightSimulationView: View {
         }
     }
 
+    private var rangeHistory: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(display.text("샷 기록"), systemImage: "list.bullet")
+                .font(.headline)
+            List(selection: $selectedID) {
+                ForEach(orderedShots) { shot in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(shot.club ?? display.text("클럽 미상")).fontWeight(.medium)
+                        Text(display.distance(shot.carryDistance, from: shot.distanceUnit))
+                            .monospacedDigit()
+                        Text((shot.timestamp ?? shot.receivedAt).formatted())
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                    .tag(shot.id)
+                }
+            }
+            .accessibilityLabel(display.text("샷 기록"))
+        }
+        .frame(width: 172)
+    }
+
     private func simulation(_ replay: FlightReplay, shot: ShotRecord) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label(display.text("기록 기반 재현"), systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                    .font(.system(size: 12, weight: .medium))
-                Spacer()
-                if camera == .perspective {
-                    Button {
-                        orbit = .initial
-                    } label: {
-                        Label(display.text("시점 초기화"), systemImage: "viewfinder")
-                    }
-                    .help(display.text("3D 시점을 처음 각도로 되돌립니다."))
-                }
-                Picker(display.text("시점"), selection: $camera) {
-                    ForEach(FlightCamera.allCases) { view in Text(display.text(view.labelKey)).tag(view) }
-                }.pickerStyle(.segmented).frame(width: 270)
-            }
             TimelineView(.animation(minimumInterval: 1 / 60, paused: !isPlaying)) { timeline in
                 let t = playbackTime(at: timeline.date, duration: replay.duration)
                 let ball = replay.position(at: t)
                 VStack(spacing: 12) {
-                    FlightCanvas(replay: replay, time: t, camera: camera, pose: camera.pose(orbit: visibleOrbit),
-                                 unit: display.distanceUnit, language: display.language)
-                        .frame(height: 330)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .contentShape(Rectangle())
-                        .gesture(orbitGesture, including: camera == .perspective ? .all : .none)
-                        .help(display.text(camera == .perspective ? "바닥을 드래그하여 좌우 회전과 높이 각도를 조절하세요." : "3D 시점에서 마우스로 시점을 조절할 수 있습니다."))
-                        .overlay(alignment: .topLeading) {
-                            HStack(spacing: 18) {
-                                hud(display.text(ball.phase.rawValue), value: String(format: "%.2f s", t))
-                                hud("진행 거리", value: display.distance(ball.groundDistance))
-                                hud("현재 높이", value: display.distance(ball.height))
+                    HStack(alignment: .top, spacing: 14) {
+                        if !rangeExpanded {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(display.text("공 비행 시뮬레이션")).font(.headline)
+                                    .frame(height: 24)
+                                FlightCanvas(replay: replay, time: t, camera: camera, pose: camera.pose(orbit: visibleOrbit),
+                                             unit: display.distanceUnit, language: display.language)
+                                    .frame(height: 320)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .contentShape(Rectangle())
+                                    .gesture(orbitGesture, including: camera == .perspective ? .all : .none)
+                                    .help(display.text("바닥을 드래그하여 좌우 회전과 높이 각도를 조절하세요."))
+                                    .overlay(alignment: .topLeading) { shotHUD(replay, ball: ball, time: t) }
+                                    .accessibilityLabel(display.text("{0}, 진행 거리 {1}, 높이 {2}", display.text(ball.phase.rawValue),
+                                                                    display.distance(ball.groundDistance), display.distance(ball.height)))
+                                HStack {
+                                    Picker(display.text("시점"), selection: $camera) {
+                                        ForEach(FlightCamera.allCases) { view in Text(display.text(view.labelKey)).tag(view) }
+                                    }.labelsHidden().pickerStyle(.segmented)
+                                    if camera == .perspective {
+                                        Button { orbit = .initial } label: { Image(systemName: "viewfinder") }
+                                            .help(display.text("시점 초기화"))
+                                            .accessibilityLabel(display.text("시점 초기화"))
+                                    }
+                                }
                             }
-                            .padding(13)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                            .padding(12)
-                            .allowsHitTesting(false)
+                            .frame(width: 252)
                         }
-                        .accessibilityLabel(display.text("{0}, 진행 거리 {1}, 높이 {2}", display.text(ball.phase.rawValue),
-                                                        display.distance(ball.groundDistance), display.distance(ball.height)))
-                    if camera == .perspective {
-                        HStack {
-                            Label(display.text("드래그: 좌우 회전 · 위아래 각도"), systemImage: "hand.draw")
-                            Spacer()
-                            Text(display.text("회전 {0}° · 높이 {1}°",
-                                              display.number(visibleOrbit.yaw * 180 / .pi, digits: 0),
-                                              display.number(visibleOrbit.elevation * 180 / .pi, digits: 0)))
-                                .monospacedDigit()
+                        VStack(alignment: .leading, spacing: 8) {
+                            rangeHeader
+                            VirtualRangeCanvas(replay: replay, time: t, unit: display.distanceUnit, followsBall: followBall)
+                                .frame(height: rangeHeight)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .accessibilityLabel("Virtual Range")
+                                .overlay(alignment: .topLeading) { shotHUD(replay, ball: ball, time: t) }
+                                .overlay(alignment: .bottom) { shotDetails(replay, shot: shot) }
+                                .overlay(alignment: .topTrailing) {
+                                    RangeShotMap(replay: replay, time: t)
+                                        .frame(width: 70, height: 86)
+                                        .padding(10)
+                                        .accessibilityHidden(true)
+                                        .allowsHitTesting(false)
+                                }
                         }
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     HStack(spacing: 12) {
                         Button {
@@ -182,17 +232,6 @@ struct FlightSimulationView: View {
                     if ended { offset = replay.duration; isPlaying = false }
                 }
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
-                valueCard("캐리", value: display.distance(replay.carry), estimated: replay.carryIsEstimated)
-                valueCard("최고 높이", value: display.distance(replay.apex), estimated: replay.apexIsEstimated)
-                valueCard("발사각", value: String(format: "%.1f°", replay.launchAngle), estimated: replay.launchAngleIsEstimated)
-                valueCard("출발 방향", value: shot.resolvedLaunchDirection.map { display.number($0) + "°" } ?? "—", estimated: false)
-                valueCard("스매시 팩터", value: display.number(shot.resolvedSmashFactor, digits: 2), estimated: false)
-                    .help(display.text("스매시 팩터 = 볼 속도 ÷ 클럽 속도"))
-                valueCard("볼 스피드", value: shot.ballSpeed.map { display.number($0) + " " + shot.speedUnit } ?? "—", estimated: false)
-                valueCard("비행 시간", value: String(format: "%.2f s", replay.flightDuration), estimated: true)
-                valueCard("구른 거리", value: display.distance(replay.rollDistance), estimated: replay.rollDistanceIsEstimated)
-            }
             if replay.usesAssumedAngle {
                 HStack {
                     Text(display.text("가정 발사각 {0}°", String(Int(assumedAngle)))).font(.system(size: 12)).frame(width: 160, alignment: .leading)
@@ -208,20 +247,70 @@ struct FlightSimulationView: View {
         }
     }
 
+    private var rangeHeight: CGFloat { rangeExpanded ? 530 : 480 }
+
+    private func shotDetails(_ replay: FlightReplay, shot: ShotRecord) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 5), spacing: 4) {
+            valueCard("캐리", value: display.distance(replay.carry), estimated: replay.carryIsEstimated)
+            valueCard("최고 높이", value: display.distance(replay.apex), estimated: replay.apexIsEstimated)
+            valueCard("발사각", value: String(format: "%.1f°", replay.launchAngle), estimated: replay.launchAngleIsEstimated)
+            valueCard("출발 방향", value: shot.resolvedLaunchDirection.map { display.number($0) + "°" } ?? "—", estimated: false)
+            valueCard("스매시 팩터", value: display.number(shot.resolvedSmashFactor, digits: 2), estimated: false)
+                .help(display.text("스매시 팩터 = 볼 속도 ÷ 클럽 속도"))
+            valueCard("볼 스피드", value: shot.ballSpeed.map { display.number($0) + " " + shot.speedUnit } ?? "—", estimated: false)
+            valueCard("클럽 스피드", value: shot.clubSpeed.map { display.number($0) + " " + shot.speedUnit } ?? "—", estimated: false)
+            valueCard("스핀", value: shot.spinRPM.map { display.number($0, digits: 0) + " rpm" } ?? "—", estimated: false)
+            valueCard("비행 시간", value: String(format: "%.2f s", replay.flightDuration), estimated: true)
+            valueCard("구른 거리", value: display.distance(replay.rollDistance), estimated: replay.rollDistanceIsEstimated)
+        }
+        .padding(9)
+        .background(.black.opacity(0.52), in: RoundedRectangle(cornerRadius: 12))
+        .padding(10)
+        .allowsHitTesting(false)
+    }
+
+    private var rangeHeader: some View {
+        HStack {
+            Text("Virtual Range").font(.headline)
+            Spacer()
+            Toggle(display.text("카메라로 공 따라가기"), isOn: $followBall)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            Button {
+                rangeExpanded.toggle()
+            } label: {
+                Image(systemName: rangeExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+            }
+            .help(display.text(rangeExpanded ? "나란히 보기" : "Virtual Range 확대"))
+            .accessibilityLabel(display.text(rangeExpanded ? "나란히 보기" : "Virtual Range 확대"))
+        }
+        .frame(height: 24)
+    }
+
+    private func shotHUD(_ replay: FlightReplay, ball: FlightPosition, time: Double) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                hud(ball.phase.rawValue, value: String(format: "%.2f s", time))
+                hud("진행 거리", value: display.distance(ball.groundDistance))
+                hud("현재 높이", value: display.distance(ball.height))
+            }
+            HStack(spacing: 10) {
+                hud(replay.carryIsEstimated ? "추정 캐리" : "캐리", value: display.distance(replay.carry))
+                hud(replay.rollDistanceIsEstimated ? "추정 총거리" : "총거리", value: display.distance(replay.total))
+            }
+        }
+        .padding(9)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(10)
+        .allowsHitTesting(false)
+    }
+
     private func playbackTime(at date: Date, duration: Double) -> Double {
         let elapsed = isPlaying ? max(0, date.timeIntervalSince(startedAt)) * rate : 0
         return min(duration, max(0, offset + elapsed))
     }
 
     private func restart() { offset = 0; startedAt = Date(); isPlaying = true }
-
-    private func shotLabel(_ shot: ShotRecord) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd HH:mm:ss"
-        formatter.locale = display.language.locale
-        let distance = shot.carryDistance == nil ? display.text("캐리 없음") : display.distance(shot.carryDistance, from: shot.distanceUnit)
-        return "\(formatter.string(from: shot.timestamp ?? shot.receivedAt)) · \(shot.club ?? display.text("클럽 미상")) · \(distance)"
-    }
 
     private func directionDescription(_ replay: FlightReplay) -> String {
         replay.headingIsEstimated ? display.text("방향 기록 없음: 직진으로 표시") : display.text("기록된 출발 방향 {0}°", display.number(replay.heading))
@@ -235,15 +324,17 @@ struct FlightSimulationView: View {
     }
 
     private func valueCard(_ title: String, value: String, estimated: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 5) {
-                Text(display.text(title)).font(.system(size: 11)).foregroundStyle(.secondary)
-                if estimated { Text(display.text("추정")).font(.system(size: 9, weight: .medium)).foregroundStyle(.orange) }
-            }
-            Text(value).font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit()
+        VStack(alignment: .leading, spacing: 1) {
+            Text(estimated ? display.text(title) + " (" + display.text("추정") + ")" : display.text(title))
+                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.83))
+                .lineLimit(1).minimumScaleFactor(0.72)
+            Text(value).font(.system(size: 14, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1).minimumScaleFactor(0.72)
         }
-        .frame(maxWidth: .infinity, alignment: .leading).padding(13)
-        .background(.white, in: RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
     }
 }
 
@@ -294,7 +385,7 @@ private struct FlightCanvas: View {
                            with: .color(.white.opacity(0.45)), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
             let landing = replay.position(at: replay.flightDuration)
             let landingPoint = projection.point(landing)
-            if camera != .side {
+            if time >= replay.flightDuration && camera != .side {
                 let radius = max(0.20, range * 0.025)
                 let ring = (0...48).map { index -> CGPoint in
                     let angle = Double(index) / 48 * 2 * Double.pi
@@ -302,18 +393,18 @@ private struct FlightCanvas: View {
                 }
                 context.stroke(polyline(ring), with: .color(.white.opacity(0.7)), lineWidth: 1.5)
             }
-            context.stroke(polyline(path.map(projection.point)), with: .color(gold.opacity(0.34)),
-                           style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
             context.stroke(polyline(replay.points(until: time).map(projection.point)), with: .color(gold),
                            style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
             let origin = projection.point(world(0, 0, 0))
             context.fill(Path(ellipseIn: CGRect(x: origin.x - 4, y: origin.y - 4, width: 8, height: 8)), with: .color(.white))
             context.draw(Text(AppLocalizer(language: language).text("출발")).font(.system(size: 11, weight: .medium)).foregroundColor(.black.opacity(0.6)),
                          at: CGPoint(x: origin.x, y: origin.y + 17))
-            let flagTop = CGPoint(x: landingPoint.x, y: landingPoint.y - 28)
-            context.stroke(polyline([landingPoint, flagTop]), with: .color(.white), lineWidth: 2)
-            context.fill(polyline([flagTop, CGPoint(x: flagTop.x + 15, y: flagTop.y + 5), CGPoint(x: flagTop.x, y: flagTop.y + 10)], close: true),
-                         with: .color(Color(red: 0.88, green: 0.34, blue: 0.26)))
+            if time >= replay.flightDuration {
+                let flagTop = CGPoint(x: landingPoint.x, y: landingPoint.y - 28)
+                context.stroke(polyline([landingPoint, flagTop]), with: .color(.white), lineWidth: 2)
+                context.fill(polyline([flagTop, CGPoint(x: flagTop.x + 15, y: flagTop.y + 5), CGPoint(x: flagTop.x, y: flagTop.y + 10)], close: true),
+                             with: .color(Color(red: 0.88, green: 0.34, blue: 0.26)))
+            }
             let current = replay.position(at: time)
             let ball = projection.point(current)
             let shadow = projection.point(world(current.forward, current.lateral, 0))

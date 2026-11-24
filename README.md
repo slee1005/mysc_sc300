@@ -4,7 +4,13 @@ Native macOS app that receives live Bluetooth shots from **SC4 2188**, saves rec
 
 **Version 1.2.0 · Apple Silicon · macOS 13 or later**
 
-[Download the Mac app ZIP](https://github.com/slee1005/mysc_sc300/releases/download/v1.2.0/SC4ShotCollector-1.2.0-macOS-arm64.zip) · [한국어 사용법](README.ko.txt) · [English instructions](README.en.txt)
+[Download the released v1.2.0 Mac app ZIP](https://github.com/slee1005/mysc_sc300/releases/download/v1.2.0/SC4ShotCollector-1.2.0-macOS-arm64.zip) · [한국어 사용법](README.ko.txt) · [English instructions](README.en.txt)
+
+## Virtual Range demo
+
+[![Virtual Range sample showing the ball trajectory and translucent shot metrics](docs/media/virtual-range-preview.jpg)](docs/media/virtual-range-demo.mp4?raw=true)
+
+[Play or download the 14-second MP4](docs/media/virtual-range-demo.mp4?raw=true). The sample uses synthetic shot data to show synchronized side-by-side playback, the expanded Virtual Range, and the Follow Ball camera. Build from the current source to try the features shown here.
 
 ## Features
 
@@ -16,6 +22,7 @@ Native macOS app that receives live Bluetooth shots from **SC4 2188**, saves rec
 - Animated replay with 3D, side and top views, timeline scrubbing and playback speed controls.
 - Drag the ground in 3D to rotate and tilt the camera; Reset View restores the starting angle.
 - Optional automatic replay of newly received shots.
+- Open **Virtual Range** or **Flight Simulation** to see both views side by side with shared shot history and playback. Use the expand button for a wider range view with translucent shot metrics, or enable **Follow Ball** to pan and zoom with the ball. Connect the SC4 from the main window before opening the range for live practice. Opening from the **Virtual Range** button enables automatic replay of new shots.
 
 ## Run and build
 

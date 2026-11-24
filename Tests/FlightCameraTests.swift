@@ -10,11 +10,11 @@ enum FlightCameraTests {
         let start = FlightOrbit.initial
         precondition(start.dragging(horizontal: 0, vertical: 0) == start)
         let rotated = start.dragging(horizontal: 100, vertical: -50)
-        close(rotated.yaw, 0.4)
+        close(rotated.yaw, 0.8)
         close(rotated.elevation, 0.9)
         // A completed drag followed by a second drag continues from the current view.
         let second = rotated.dragging(horizontal: -25, vertical: 10)
-        close(second.yaw, 0.2)
+        close(second.yaw, 0.6)
         close(second.elevation, 0.84)
         let turn = start.dragging(horizontal: 2 * .pi / 0.008, vertical: 0)
         close(turn.yaw, start.yaw)
@@ -31,8 +31,15 @@ enum FlightCameraTests {
         let top = FlightCamera.top.pose(orbit: rotated)
         close(side.project(sample).x, 200)
         close(side.project(sample).y, -30)
-        close(top.project(sample).x, 200)
-        close(top.project(sample).y, 15)
+        close(top.project(sample).x, -15)
+        close(top.project(sample).y, -200)
+        let straight = FlightPosition(forward: 200, lateral: 0, height: 30, groundDistance: 200, phase: .flying)
+        let right = FlightPosition(forward: 200, lateral: 15, height: 30, groundDistance: 200, phase: .flying)
+        let teeView = FlightCamera.perspective.pose(orbit: start)
+        for pose in [teeView, top] {
+            precondition(pose.project(sample).x < pose.project(straight).x)
+            precondition(pose.project(right).x > pose.project(straight).x)
+        }
         precondition(FlightCamera.side.pose(orbit: start) == side)
         precondition(FlightCamera.top.pose(orbit: start) == top)
         let originalView = FlightCamera.perspective.pose(orbit: start).project(sample)

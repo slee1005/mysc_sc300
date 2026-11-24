@@ -31,6 +31,7 @@ private struct CollectorView: View {
     @State private var showLogs = false
     @State private var selection: UUID?
     @State private var simulationShot: ShotRecord?
+    @State private var showVirtualRange = false
     private let teal = Color(red: 0.06, green: 0.30, blue: 0.29)
     private let muted = Color(red: 0.43, green: 0.48, blue: 0.48)
     private let canvas = Color(red: 0.96, green: 0.97, blue: 0.96)
@@ -54,6 +55,10 @@ private struct CollectorView: View {
         .tint(teal)
         .sheet(item: $simulationShot) { shot in
             FlightSimulationView(shot: shot).environmentObject(model).environmentObject(display)
+        }
+        .sheet(isPresented: $showVirtualRange) {
+            FlightSimulationView(shot: orderedShots.first, startsInLiveMode: true)
+                .environmentObject(model).environmentObject(display)
         }
         .alert(display.text("확인이 필요합니다"), isPresented: Binding(
             get: { model.errorMessage != nil },
@@ -90,6 +95,12 @@ private struct CollectorView: View {
                     Text("yd").tag(DistanceUnit.yards)
                 }.pickerStyle(.segmented).frame(width: 175)
             }
+            Button {
+                showVirtualRange = true
+            } label: {
+                Label("Virtual Range", systemImage: "figure.golf")
+            }
+            .buttonStyle(.borderedProminent)
             Label(display.text("Mac 기록 보존"), systemImage: "checkmark.shield")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(teal)

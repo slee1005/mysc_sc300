@@ -130,3 +130,12 @@
 "3D 시점에서 마우스로 시점을 조절할 수 있습니다." = "Switch to 3D View to adjust the camera with the mouse.";
 "드래그: 좌우 회전 · 위아래 각도" = "Drag: rotate horizontally · tilt vertically";
 "회전 {0}° · 높이 {1}°" = "Rotation {0}° · elevation {1}°";
+"SC4 샷을 연습장에서 재생합니다." = "Replay SC4 shots on the driving range.";
+"샷을 치면 여기에 표시됩니다." = "Hit a shot to see it here.";
+"추정 캐리" = "Estimated Carry";
+"추정 총거리" = "Estimated Total";
+"총거리" = "Total Distance";
+"카메라로 공 따라가기" = "Follow Ball";
+
+"나란히 보기" = "Side by Side";
+"Virtual Range 확대" = "Expand Virtual Range";
